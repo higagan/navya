@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 import config
-from ocr_engines import EngineUnavailableError, ParinamikaEngine
+from ocr_engines import EngineUnavailableError, OllamaVisionEngine, ParinamikaEngine
 
 
 def test_parinamika_unavailable_when_unconfigured(monkeypatch):
@@ -75,3 +75,16 @@ def test_parinamika_file_mode_reads_json_export(monkeypatch, tmp_path):
 
     assert result.text == "देवदत्तो गच्छति"
     assert len(result.blocks) == 1
+
+
+def test_ollama_vision_unavailable_without_model():
+    engine = OllamaVisionEngine(model=None)
+
+    with pytest.raises(EngineUnavailableError):
+        engine.recognize(Path("does-not-matter.png"), page_num=1)
+
+
+def test_ollama_vision_engine_name_includes_model():
+    engine = OllamaVisionEngine(model="qwen3-vl:8b")
+
+    assert engine.name == "ollama:qwen3-vl:8b"

@@ -24,6 +24,11 @@ PARINAMIKA_HTTP_API_KEY = os.environ.get("PARINAMIKA_HTTP_API_KEY")
 
 GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
 
+# Local/cloud vision-language models via Ollama, evaluated as an
+# alternative OCR engine — see ocr_engines/ollama_vision.py.
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL")
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 LLM_MODEL = os.environ.get("NAVYA_LLM_MODEL", "anthropic/claude-sonnet-5")
 

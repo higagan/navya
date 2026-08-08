@@ -2,5 +2,7 @@ python-dotenv
 requests
 google-cloud-vision
 openai
+ollama
+pillow
 # paddleocr
 # paddlepaddle

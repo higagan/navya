@@ -1,5 +1,6 @@
 from .base import EngineUnavailableError, OCREngine
 from .google_vision import GoogleVisionEngine
+from .ollama_vision import OllamaVisionEngine
 from .parinamika import ParinamikaEngine
 
 try:
@@ -12,5 +13,6 @@ __all__ = [
     "EngineUnavailableError",
     "ParinamikaEngine",
     "GoogleVisionEngine",
+    "OllamaVisionEngine",
     "PaddleOCREngine",
 ]

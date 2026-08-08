@@ -6,6 +6,7 @@ import config
 from cross_check import cross_check as run_cross_check
 from llm_postprocess import StructuringError, structure_page
 from ocr_engines import EngineUnavailableError, GoogleVisionEngine, ParinamikaEngine
+from page_numbering import infer_offset, printed_page_for
 from pdf_to_images import page_num_from_filename, pdf_to_page_images
 
 
@@ -51,7 +52,80 @@ def run(pdf_path: Path, book_slug: str, first_page: int, last_page: int, dpi: in
                 # rerun with --first-page/--last-page can target just the gaps.
                 print(f"    ✗ page {page_num} failed, skipping: {e}")
 
-    print(f"[4/4] Done. Output: {text_dir}, {pages_jsonl_path}, {structured_jsonl_path}")
+    print("[4/4] Reconciling page numbers across the run...")
+    _reconcile_page_numbers(structured_jsonl_path)
+
+    print(f"Done. Output: {text_dir}, {pages_jsonl_path}, {structured_jsonl_path}")
+
+
+def _reconcile_page_numbers(structured_jsonl_path: Path):
+    """Fill in printed page numbers arithmetically from a book-wide offset.
+
+    OCR reads the printed numeral correctly on only a minority of pages —
+    it's an isolated glyph in a margin with no context to constrain it. But
+    the numbers are sequential, so a handful of confident readings pin down
+    one offset that yields every other page for free. See page_numbering.py.
+
+    OCR-read values are kept as-is where present; this only fills gaps and
+    records disagreements rather than overwriting them silently.
+    """
+    pages = [
+        json.loads(line)
+        for line in structured_jsonl_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    observations = {
+        p["pdf_page"]: p.get("printed_page")
+        for p in pages
+        if p.get("pdf_page") is not None and p.get("printed_page")
+    }
+    inference = infer_offset(observations)
+
+    if not inference.is_reliable:
+        print(
+            f"    page-number offset unreliable "
+            f"(offset={inference.offset}, confidence={inference.confidence:.2f}, "
+            f"{len(inference.supporting_pages)} supporting) — leaving page numbers as OCR read them"
+        )
+        return
+
+    print(
+        f"    offset={inference.offset} from {len(inference.supporting_pages)} pages "
+        f"(confidence {inference.confidence:.2f})"
+    )
+
+    filled = 0
+    for page in pages:
+        pdf_page = page.get("pdf_page")
+        if pdf_page is None:
+            continue
+        derived = printed_page_for(pdf_page, inference.offset)
+        ocr_value = page.get("printed_page")
+
+        if not ocr_value:
+            page["printed_page"] = derived
+            page["printed_page_source"] = "derived_from_offset"
+            filled += 1
+        elif ocr_value != derived:
+            # Trust the sequence over a lone glyph, but keep the reading so a
+            # reviewer can catch genuine renumbering rather than an OCR slip.
+            page["printed_page"] = derived
+            page["printed_page_source"] = "derived_from_offset"
+            page["printed_page_ocr_disagreed"] = ocr_value
+            page.setdefault("review_notes", []).append(
+                f"OCR read printed page as {ocr_value!r}, but the book-wide "
+                f"offset implies {derived!r}; used the offset."
+            )
+            page["needs_review"] = True
+        else:
+            page["printed_page_source"] = "ocr_confirmed"
+
+    with open(structured_jsonl_path, "w", encoding="utf-8") as f:
+        for page in pages:
+            f.write(json.dumps(page, ensure_ascii=False) + "\n")
+
+    print(f"    filled {filled} missing page number(s)")
 
 
 def _process_page(
