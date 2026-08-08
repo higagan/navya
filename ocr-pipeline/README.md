@@ -35,20 +35,33 @@ cp .env.example .env   # then fill in credentials below
 ```
 
 ### Parinamika / Akshar Anveshini (primary engine)
-No fixed public API is wired in yet — `ocr_engines/parinamika.py` is a
-pluggable adapter supporting either a local CLI or an HTTP endpoint. Once we
-have the real interface (binary, Docker image, or hosted API from IIT
-Bombay), set in `.env`:
+This tool has **no public API or CLI** — it's a login-gated web app at
+https://www.cse.iitb.ac.in/~ocr/. Credentials are granted on request
+(contact: Prof. Pushpak Bhattacharyya, CFILT, IIT Bombay — pb@cse.iitb.ac.in);
+nothing is documented about batch/programmatic access.
 
-- CLI: `PARINAMIKA_MODE=cli` and `PARINAMIKA_CLI_CMD="<command> --input {image} --output {out}"`
-- HTTP: `PARINAMIKA_MODE=http` and `PARINAMIKA_HTTP_URL=...` (+ `PARINAMIKA_HTTP_API_KEY` if needed)
+Given that, the working mode today is **file**: run pages through their web
+UI yourself, export the OCR text, and drop one file per page into a folder:
 
-If you also need to adjust how its JSON response is parsed, edit
-`_parse_payload` in that file — the rest of the pipeline doesn't need to
-change.
+```
+PARINAMIKA_MODE=file
+PARINAMIKA_INPUT_DIR=/path/to/parinamika-exports
+```
 
-Until this is configured, every page automatically falls back to Google
-Vision (that's a working, functional path today).
+Name each export to match the rendered page, e.g. `page-017.txt` (plain
+text) or `page-017.json` (structured — see `_parse_payload` in
+`ocr_engines/parinamika.py` for the expected shape). The pipeline looks up
+each page's file as it goes and falls back to Google Vision automatically
+for any page whose export isn't there yet — so you can backfill Parinamika
+coverage incrementally rather than blocking the whole run on manual work.
+
+`PARINAMIKA_MODE=cli` / `=http` are also implemented, for if/when IIT Bombay
+provides a real programmatic interface — fill in `PARINAMIKA_CLI_CMD` or
+`PARINAMIKA_HTTP_URL` (+ `_parse_payload` if the response shape differs)
+once that exists. Nothing else in the pipeline needs to change.
+
+Leave `PARINAMIKA_MODE` unset to skip straight to Google Vision for every
+page (that's a working, functional path today).
 
 ### Google Cloud Vision (fallback engine)
 1. Create a GCP project, enable the Vision API, create a service account key.

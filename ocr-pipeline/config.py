@@ -12,9 +12,10 @@ JSONL_DIR = PROJECT_ROOT / "output" / "jsonl"
 
 PDF_RENDER_DPI = int(os.environ.get("PDF_RENDER_DPI", "400"))
 
-# Parinamika / Akshar Anveshini (IIT Bombay) — pluggable, no fixed public API.
-# Set exactly one of these once we have the real interface details.
-PARINAMIKA_MODE = os.environ.get("PARINAMIKA_MODE")  # "cli" | "http" | None
+# Parinamika / Akshar Anveshini (IIT Bombay) — no public API, see
+# ocr_engines/parinamika.py for what each mode means.
+PARINAMIKA_MODE = os.environ.get("PARINAMIKA_MODE")  # "file" | "cli" | "http" | None
+PARINAMIKA_INPUT_DIR = os.environ.get("PARINAMIKA_INPUT_DIR")
 PARINAMIKA_CLI_CMD = os.environ.get(
     "PARINAMIKA_CLI_CMD"
 )  # e.g. "parinamika-ocr --lang san --input {image} --output {out}"
