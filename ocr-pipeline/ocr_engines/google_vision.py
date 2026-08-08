@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 from google.cloud import vision
@@ -6,6 +7,9 @@ import config
 from schemas import OCRBlock, PageOCRResult
 
 from .base import EngineUnavailableError, OCREngine
+
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 2
 
 
 class GoogleVisionEngine(OCREngine):
@@ -34,10 +38,26 @@ class GoogleVisionEngine(OCREngine):
         # correct choice for full pages of printed text rather than sparse labels.
         image_context = vision.ImageContext(language_hints=["sa", "hi"])
 
-        try:
-            response = self.client.document_text_detection(image=image, image_context=image_context)
-        except Exception as e:
-            raise EngineUnavailableError(f"Google Vision call failed: {e}") from e
+        response = None
+        last_error = None
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                response = self.client.document_text_detection(
+                    image=image, image_context=image_context
+                )
+                break
+            except Exception as e:
+                # Transient network blips (connection resets, 503s) are common
+                # against a remote API across hundreds of pages — worth a
+                # short retry before giving up on the page.
+                last_error = e
+                if attempt < MAX_ATTEMPTS:
+                    time.sleep(RETRY_BACKOFF_SECONDS * attempt)
+
+        if response is None:
+            raise EngineUnavailableError(
+                f"Google Vision call failed after {MAX_ATTEMPTS} attempts: {last_error}"
+            ) from last_error
 
         if response.error.message:
             raise EngineUnavailableError(f"Google Vision API error: {response.error.message}")

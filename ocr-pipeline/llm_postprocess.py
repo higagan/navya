@@ -72,6 +72,39 @@ def build_user_message(
     return "\n".join(parts)
 
 
+class StructuringError(Exception):
+    """Raised when the LLM's response can't be turned into a StructuredPage,
+    even after a repair attempt. Callers should treat this as a per-page
+    failure, not abort a whole batch run."""
+
+
+def _extract_json_text(raw_text: str) -> str:
+    raw_text = raw_text.strip()
+    if raw_text.startswith("```"):
+        raw_text = raw_text.strip("`")
+        raw_text = raw_text.split("\n", 1)[1] if raw_text.lower().startswith("json") else raw_text
+    return raw_text.strip()
+
+
+def _call_llm(client: OpenAI, messages: list[dict]) -> str:
+    completion = client.chat.completions.create(
+        model=config.LLM_MODEL,
+        max_tokens=8192,
+        # This is a mechanical extraction/structuring task, not a reasoning task —
+        # extended thinking just burns the token budget without improving output,
+        # and on some models leaves finish_reason="length" with empty content.
+        extra_body={"reasoning": {"enabled": False}},
+        response_format={"type": "json_object"},
+        messages=messages,
+    )
+    content = completion.choices[0].message.content
+    if not content:
+        raise StructuringError(
+            f"LLM returned empty content (finish_reason={completion.choices[0].finish_reason})"
+        )
+    return content
+
+
 def structure_page(
     primary: PageOCRResult, cross_check: CrossCheckResult | None = None
 ) -> StructuredPage:
@@ -80,28 +113,38 @@ def structure_page(
         api_key=config.OPENROUTER_API_KEY,
     )
 
-    completion = client.chat.completions.create(
-        model=config.LLM_MODEL,
-        max_tokens=8192,
-        # This is a mechanical extraction/structuring task, not a reasoning task —
-        # extended thinking just burns the token budget without improving output,
-        # and on some models leaves finish_reason="length" with empty content.
-        extra_body={"reasoning": {"enabled": False}},
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+    user_message = build_user_message(primary.page_num, primary, cross_check)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
+
+    raw_text = _call_llm(client, messages)
+
+    try:
+        payload = json.loads(_extract_json_text(raw_text))
+    except json.JSONDecodeError as e:
+        # response_format=json_object should prevent this, but some providers
+        # don't enforce it reliably — give the model one chance to fix its
+        # own output before giving up on the page.
+        repair_messages = messages + [
+            {"role": "assistant", "content": raw_text},
             {
                 "role": "user",
-                "content": build_user_message(primary.page_num, primary, cross_check),
+                "content": (
+                    f"That was not valid JSON ({e}). Return the exact same content "
+                    "again, but as strictly valid JSON matching the required shape."
+                ),
             },
-        ],
-    )
-
-    raw_text = completion.choices[0].message.content.strip()
-    if raw_text.startswith("```"):
-        raw_text = raw_text.strip("`")
-        raw_text = raw_text.split("\n", 1)[1] if raw_text.lower().startswith("json") else raw_text
-
-    payload = json.loads(raw_text)
+        ]
+        try:
+            repaired_text = _call_llm(client, repair_messages)
+            payload = json.loads(_extract_json_text(repaired_text))
+        except json.JSONDecodeError as e2:
+            raise StructuringError(
+                f"page {primary.page_num}: LLM output was not valid JSON, "
+                f"even after a repair attempt ({e2})"
+            ) from e2
 
     return StructuredPage(
         pdf_page=primary.page_num,
