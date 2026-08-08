@@ -1,0 +1,6 @@
+python-dotenv
+requests
+google-cloud-vision
+anthropic
+# paddleocr
+# paddlepaddle

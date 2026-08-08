@@ -1,0 +1,9 @@
+*.pdf
+ocr-experiment/pages/
+ocr-experiment/output/*.json
+ocr-pipeline/.venv/
+ocr-pipeline/.env
+ocr-pipeline/output/
+__pycache__/
+*.pyc
+.DS_Store
