@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,7 +15,9 @@ PDF_RENDER_DPI = int(os.environ.get("PDF_RENDER_DPI", "400"))
 # Parinamika / Akshar Anveshini (IIT Bombay) — pluggable, no fixed public API.
 # Set exactly one of these once we have the real interface details.
 PARINAMIKA_MODE = os.environ.get("PARINAMIKA_MODE")  # "cli" | "http" | None
-PARINAMIKA_CLI_CMD = os.environ.get("PARINAMIKA_CLI_CMD")  # e.g. "parinamika-ocr --lang san --input {image} --output {out}"
+PARINAMIKA_CLI_CMD = os.environ.get(
+    "PARINAMIKA_CLI_CMD"
+)  # e.g. "parinamika-ocr --lang san --input {image} --output {out}"
 PARINAMIKA_HTTP_URL = os.environ.get("PARINAMIKA_HTTP_URL")
 PARINAMIKA_HTTP_API_KEY = os.environ.get("PARINAMIKA_HTTP_API_KEY")
 

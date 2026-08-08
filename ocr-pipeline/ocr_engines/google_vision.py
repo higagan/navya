@@ -4,7 +4,8 @@ from google.cloud import vision
 
 import config
 from schemas import OCRBlock, PageOCRResult
-from .base import OCREngine, EngineUnavailableError
+
+from .base import EngineUnavailableError, OCREngine
 
 
 class GoogleVisionEngine(OCREngine):
@@ -34,9 +35,7 @@ class GoogleVisionEngine(OCREngine):
         image_context = vision.ImageContext(language_hints=["sa", "hi"])
 
         try:
-            response = self.client.document_text_detection(
-                image=image, image_context=image_context
-            )
+            response = self.client.document_text_detection(image=image, image_context=image_context)
         except Exception as e:
             raise EngineUnavailableError(f"Google Vision call failed: {e}") from e
 
@@ -58,8 +57,6 @@ class GoogleVisionEngine(OCREngine):
                 xs = [v.x for v in vertices]
                 ys = [v.y for v in vertices]
                 bbox = (min(xs), min(ys), max(xs), max(ys))
-                blocks.append(
-                    OCRBlock(text=block_text, bbox=bbox, confidence=block.confidence)
-                )
+                blocks.append(OCRBlock(text=block_text, bbox=bbox, confidence=block.confidence))
 
         return PageOCRResult(page_num=page_num, engine=self.name, text=text, blocks=blocks)

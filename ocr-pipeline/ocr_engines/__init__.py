@@ -1,6 +1,6 @@
-from .base import OCREngine, EngineUnavailableError
-from .parinamika import ParinamikaEngine
+from .base import EngineUnavailableError, OCREngine
 from .google_vision import GoogleVisionEngine
+from .parinamika import ParinamikaEngine
 
 try:
     from .paddle_ocr import PaddleOCREngine

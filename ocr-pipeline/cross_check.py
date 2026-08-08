@@ -9,8 +9,8 @@ def cross_check(primary: PageOCRResult, fallback: PageOCRResult) -> CrossCheckRe
     lines below the similarity threshold as needing expert review — we never
     pick a "winner" automatically, just surface the disagreement."""
 
-    primary_lines = [l for l in primary.text.splitlines() if l.strip()]
-    fallback_lines = [l for l in fallback.text.splitlines() if l.strip()]
+    primary_lines = [line for line in primary.text.splitlines() if line.strip()]
+    fallback_lines = [line for line in fallback.text.splitlines() if line.strip()]
 
     matcher = SequenceMatcher(a=primary_lines, b=fallback_lines, autojunk=False)
     overall_ratio = matcher.ratio()

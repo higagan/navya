@@ -101,8 +101,7 @@ def structure_page(
         printed_page=payload.get("printed_page"),
         header=payload.get("header"),
         sections=[
-            StructuredSection(layer=s["layer"], text=s["text"])
-            for s in payload.get("sections", [])
+            StructuredSection(layer=s["layer"], text=s["text"]) for s in payload.get("sections", [])
         ],
         needs_review=payload.get("needs_review", False),
         review_notes=payload.get("review_notes", []),

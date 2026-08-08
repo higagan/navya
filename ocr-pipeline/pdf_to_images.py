@@ -18,9 +18,12 @@ def pdf_to_page_images(
     cmd = [
         "pdftoppm",
         "-png",
-        "-r", str(dpi),
-        "-f", str(first_page),
-        "-l", str(last_page),
+        "-r",
+        str(dpi),
+        "-f",
+        str(first_page),
+        "-l",
+        str(last_page),
         str(pdf_path),
         str(prefix),
     ]

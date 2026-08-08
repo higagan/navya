@@ -3,10 +3,10 @@ import json
 from pathlib import Path
 
 import config
-from pdf_to_images import pdf_to_page_images, page_num_from_filename
-from ocr_engines import ParinamikaEngine, GoogleVisionEngine, EngineUnavailableError
 from cross_check import cross_check as run_cross_check
 from llm_postprocess import structure_page
+from ocr_engines import EngineUnavailableError, GoogleVisionEngine, ParinamikaEngine
+from pdf_to_images import page_num_from_filename, pdf_to_page_images
 
 
 def run(pdf_path: Path, book_slug: str, first_page: int, last_page: int, dpi: int = None):
@@ -16,7 +16,9 @@ def run(pdf_path: Path, book_slug: str, first_page: int, last_page: int, dpi: in
     text_dir.mkdir(parents=True, exist_ok=True)
     jsonl_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[1/4] Rendering pages {first_page}-{last_page} at {dpi or config.PDF_RENDER_DPI} DPI...")
+    print(
+        f"[1/4] Rendering pages {first_page}-{last_page} at {dpi or config.PDF_RENDER_DPI} DPI..."
+    )
     image_paths = pdf_to_page_images(pdf_path, pages_dir, first_page, last_page, dpi)
 
     primary_engine = ParinamikaEngine()
@@ -25,9 +27,10 @@ def run(pdf_path: Path, book_slug: str, first_page: int, last_page: int, dpi: in
     pages_jsonl_path = jsonl_dir / "pages.jsonl"
     structured_jsonl_path = jsonl_dir / "structured_pages.jsonl"
 
-    with open(pages_jsonl_path, "w", encoding="utf-8") as pages_f, \
-         open(structured_jsonl_path, "w", encoding="utf-8") as structured_f:
-
+    with (
+        open(pages_jsonl_path, "w", encoding="utf-8") as pages_f,
+        open(structured_jsonl_path, "w", encoding="utf-8") as structured_f,
+    ):
         for image_path in image_paths:
             page_num = page_num_from_filename(image_path)
             print(f"[2/4] OCR page {page_num}...")
@@ -68,14 +71,18 @@ def _recognize_with_fallback(primary_engine, fallback_engine, image_path, page_n
     try:
         return primary_engine.recognize(image_path, page_num), primary_engine
     except EngineUnavailableError as e:
-        print(f"    {primary_engine.name} unavailable ({e}), falling back to {fallback_engine.name}")
+        print(
+            f"    {primary_engine.name} unavailable ({e}), falling back to {fallback_engine.name}"
+        )
         return fallback_engine.recognize(image_path, page_num), fallback_engine
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Navya OCR pipeline")
     parser.add_argument("pdf_path", type=Path)
-    parser.add_argument("book_slug", help="short id used for output subfolders, e.g. avayavaprakaranam")
+    parser.add_argument(
+        "book_slug", help="short id used for output subfolders, e.g. avayavaprakaranam"
+    )
     parser.add_argument("--first-page", type=int, default=1)
     parser.add_argument("--last-page", type=int, required=True)
     parser.add_argument("--dpi", type=int, default=None)

@@ -25,7 +25,8 @@ import requests
 
 import config
 from schemas import OCRBlock, PageOCRResult
-from .base import OCREngine, EngineUnavailableError
+
+from .base import EngineUnavailableError, OCREngine
 
 
 class ParinamikaEngine(OCREngine):

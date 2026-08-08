@@ -14,5 +14,4 @@ class OCREngine(ABC):
     name: str
 
     @abstractmethod
-    def recognize(self, image_path: Path, page_num: int) -> PageOCRResult:
-        ...
+    def recognize(self, image_path: Path, page_num: int) -> PageOCRResult: ...

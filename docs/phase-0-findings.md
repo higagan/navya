@@ -32,7 +32,7 @@ expert review step, not just OCR-and-ship.
 call, which is good for reliability.
 
 ## The citation demo
-`output/demo_qa.md` answers a real content question ("what does *parikara*
+[`examples/cited-qa-demo.md`](examples/cited-qa-demo.md) answers a real content question ("what does *parikara*
 mean in Gādādharī vs Bālādevī, and how do they differ") using only the
 transcribed chunks, with every claim tagged to `{printed_page, pdf_page,
 layer}`. This is the exact behavior ChatGPT/Gemini can't currently give.
@@ -48,6 +48,6 @@ out in the plan.
 1. Read `output/avayavaprakaranam.json` and `output/samanyanirukti.json`
    against the actual books and flag any transcription errors — this
    directly measures real-world OCR accuracy for your case.
-2. Read `output/demo_qa.md` — does the explanation style/depth match what a
+2. Read [`examples/cited-qa-demo.md`](examples/cited-qa-demo.md) — does the explanation style/depth match what a
    student would need, and are the citations verifiably correct?
 3. Confirm: Hindi, English, or both for final app explanations?
