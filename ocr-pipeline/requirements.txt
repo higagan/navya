@@ -1,6 +1,6 @@
 python-dotenv
 requests
 google-cloud-vision
-anthropic
+openai
 # paddleocr
 # paddlepaddle

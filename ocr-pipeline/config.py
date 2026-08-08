@@ -23,8 +23,8 @@ PARINAMIKA_HTTP_API_KEY = os.environ.get("PARINAMIKA_HTTP_API_KEY")
 
 GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-LLM_MODEL = os.environ.get("NAVYA_LLM_MODEL", "claude-sonnet-5")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+LLM_MODEL = os.environ.get("NAVYA_LLM_MODEL", "anthropic/claude-sonnet-5")
 
 RUN_CROSS_CHECK = os.environ.get("NAVYA_RUN_CROSS_CHECK", "1") == "1"
 CROSS_CHECK_SIMILARITY_THRESHOLD = float(os.environ.get("NAVYA_XCHECK_THRESHOLD", "0.75"))

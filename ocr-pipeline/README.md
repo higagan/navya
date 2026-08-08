@@ -13,7 +13,7 @@ PDF ──▶ pdftoppm (300-600dpi page PNGs)
          Google Vision document_text_detection (fallback)
      ──▶ [optional] cross-check: diff primary vs fallback per line,
            flag disagreements below similarity threshold
-     ──▶ LLM (Claude) structuring pass:
+     ──▶ LLM (via OpenRouter) structuring pass:
            - light Sanskrit-aware correction of OCR noise only
            - splits page into {layer, text} sections
            - extracts printed_page / header
@@ -54,8 +54,9 @@ Vision (that's a working, functional path today).
 1. Create a GCP project, enable the Vision API, create a service account key.
 2. `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json` in `.env`.
 
-### Claude (structuring step, not OCR)
-`ANTHROPIC_API_KEY=...` in `.env`.
+### LLM structuring step (not OCR), via OpenRouter
+`OPENROUTER_API_KEY=...` and `NAVYA_LLM_MODEL=anthropic/claude-sonnet-5` (or
+any other OpenRouter model slug) in `.env`.
 
 ## Run
 

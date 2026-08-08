@@ -1,6 +1,6 @@
 import json
 
-import anthropic
+from openai import OpenAI
 
 import config
 from schemas import CrossCheckResult, PageOCRResult, StructuredPage, StructuredSection
@@ -75,21 +75,28 @@ def build_user_message(
 def structure_page(
     primary: PageOCRResult, cross_check: CrossCheckResult | None = None
 ) -> StructuredPage:
-    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=config.OPENROUTER_API_KEY,
+    )
 
-    message = client.messages.create(
+    completion = client.chat.completions.create(
         model=config.LLM_MODEL,
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
+        max_tokens=8192,
+        # This is a mechanical extraction/structuring task, not a reasoning task —
+        # extended thinking just burns the token budget without improving output,
+        # and on some models leaves finish_reason="length" with empty content.
+        extra_body={"reasoning": {"enabled": False}},
         messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": build_user_message(primary.page_num, primary, cross_check),
-            }
+            },
         ],
     )
 
-    raw_text = message.content[0].text.strip()
+    raw_text = completion.choices[0].message.content.strip()
     if raw_text.startswith("```"):
         raw_text = raw_text.strip("`")
         raw_text = raw_text.split("\n", 1)[1] if raw_text.lower().startswith("json") else raw_text
