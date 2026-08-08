@@ -461,5 +461,29 @@ html = """<!DOCTYPE html>
 
 html = html.replace("__DATA__", payload).replace("__TOTAL__", str(total_checks))
 OUT.write_text(html, encoding="utf-8")
+
+# Deploy from dist/ itself, so the folder is self-contained. An empty
+# .vercelignore matters: Vercel falls back to .gitignore when it's absent,
+# and dist/ is gitignored (it embeds page scans), which would silently
+# upload a deployment with no files in it.
+(OUT.parent / ".vercelignore").write_text("", encoding="utf-8")
+(OUT.parent / "vercel.json").write_text(
+    json.dumps(
+        {
+            "$schema": "https://openapi.vercel.sh/vercel.json",
+            "headers": [
+                {
+                    "source": "/(.*)",
+                    "headers": [{"key": "X-Robots-Tag", "value": "noindex, nofollow"}],
+                }
+            ],
+        },
+        indent=2,
+    )
+    + "\n",
+    encoding="utf-8",
+)
+
 print(f"wrote {OUT} — {round(len(html) / 1024 / 1024, 2)} MB")
 print(f"{total_checks} word checks, {sum(len(d['minor']) for d in data)} minor notes")
+print(f"deploy with:  cd {OUT.parent} && npx vercel deploy --prod --yes")

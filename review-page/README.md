@@ -37,12 +37,20 @@ the page works offline and needs no asset hosting).
 
 ## Deploy
 
+Deploy from inside `dist/` — it is self-contained, and deploying from the
+project root instead produces an empty site:
+
 ```bash
-npx vercel login     # one time, opens a browser
-npx vercel deploy --prod --yes
+npx vercel login              # one time, opens a browser
+cd dist && npx vercel deploy --prod --yes
 ```
 
-`dist/` is gitignored: it embeds page scans of a 1964 edition, which this
-repo deliberately keeps out of version control (see [`../NOTICE.md`](../NOTICE.md)).
-A Vercel deployment is publicly reachable by anyone with the URL, so treat
-the link as unlisted rather than private.
+`dist/` is gitignored because it embeds page scans of a 1964 edition, which
+this repo deliberately keeps out of version control (see
+[`../NOTICE.md`](../NOTICE.md)). **Vercel falls back to `.gitignore` when no
+`.vercelignore` is present**, so deploying the parent folder uploads
+everything *except* the page itself and yields a 404. The build writes an
+empty `.vercelignore` into `dist/` to prevent that.
+
+A Vercel deployment is reachable by anyone with the URL — there is no
+password on the free tier — so treat the link as unlisted, not private.
