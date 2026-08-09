@@ -22,6 +22,7 @@ fi
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 cp "$HERE/dist/index.html" "$HERE/dist/vercel.json" "$STAGE/"
+[ -f "$HERE/dist/round2.html" ] && cp "$HERE/dist/round2.html" "$STAGE/"
 
 # Belt and braces: refuse to deploy if anything sensitive slipped in.
 if find "$STAGE" -name '.env*' -o -name '*.pem' -o -name '*.key' | grep -q .; then
