@@ -10,3 +10,5 @@ __pycache__/
 ocr-pipeline/parinamika-exports/
 review-page/dist/
 review-page/.vercel/
+.vercel
+.env*
