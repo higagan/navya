@@ -14,10 +14,14 @@ markers `PAGE {n} START` and `PAGE {n} END`.
 Your ONLY job:
 1. Fix obvious OCR noise (broken conjuncts, stray punctuation, clearly \
    misrecognized akshara-level errors) using Sanskrit-aware judgement.
-2. Split the page into sections and label each with its commentary layer \
-   (e.g. "mūla", "gādādharī", "bāladevī", "vimalaprabhā", "footnote", \
-   "header") based on bold headers / layout cues described in the OCR block \
-   positions if given.
+2. Split the page into sections. Label each with the layer named by the \
+   caller in KNOWN LAYERS below, using the bold headers and block positions \
+   in the OCR text as evidence. Do NOT use a layer name that is not in that \
+   list: commentary names differ from book to book, and a plausible-sounding \
+   name borrowed from a different text is worse than admitting uncertainty. \
+   If a block does not clearly belong to any listed layer, label it \
+   "unidentified" and say so in review_notes. Never infer the layer from \
+   subject matter alone — only from headers and layout.
 3. Extract the printed page number if visible in the OCR text (it is often a \
    lone Devanagari numeral near a margin) and the running header, if any.
 4. Return the disagreement-flagged lines you're given as review_notes verbatim \
@@ -47,9 +51,24 @@ Output ONLY a JSON object matching this shape, nothing else:
 
 
 def build_user_message(
-    page_num: int, primary: PageOCRResult, cross_check: CrossCheckResult | None
+    page_num: int,
+    primary: PageOCRResult,
+    cross_check: CrossCheckResult | None,
+    layers: list[str] | None = None,
 ) -> str:
-    parts = [f"PAGE {page_num} START", primary.text.strip(), f"PAGE {page_num} END"]
+    parts = []
+
+    # The layer vocabulary is per-book and must come from the caller. An
+    # earlier version listed commentary names in the system prompt, which
+    # were the names from a *different* volume; the model duly applied them
+    # here and produced a "bāladevī" section in a book that has none, while
+    # never labelling the Dīdhiti that is actually present.
+    if layers:
+        parts.append("KNOWN LAYERS for this book (use only these):")
+        parts.extend(f"- {name}" for name in layers)
+        parts.append("")
+
+    parts += [f"PAGE {page_num} START", primary.text.strip(), f"PAGE {page_num} END"]
 
     if primary.blocks:
         parts.append("\nOCR block layout (top-to-bottom order, bbox in pixels):")
@@ -106,14 +125,16 @@ def _call_llm(client: OpenAI, messages: list[dict]) -> str:
 
 
 def structure_page(
-    primary: PageOCRResult, cross_check: CrossCheckResult | None = None
+    primary: PageOCRResult,
+    cross_check: CrossCheckResult | None = None,
+    layers: list[str] | None = None,
 ) -> StructuredPage:
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=config.OPENROUTER_API_KEY,
     )
 
-    user_message = build_user_message(primary.page_num, primary, cross_check)
+    user_message = build_user_message(primary.page_num, primary, cross_check, layers)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_message},

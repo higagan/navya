@@ -30,6 +30,7 @@ class Confusion:
     right: str
     note: str
     confirmed: bool = False
+    rejected: bool = False
 
 
 # Ordered: longer/more specific patterns first so they aren't shadowed.
@@ -37,36 +38,50 @@ CONFUSIONS: tuple[Confusion, ...] = (
     Confusion(
         wrong="वन्हि",
         right="वह्नि",
+        rejected=True,
         note=(
-            "Conjunct order flipped (न्ह for ह्न). वह्नि 'fire' is the stock "
-            "example term in Nyāya inference; वन्हि is not a word. The OCR "
-            "produces both forms in the same run, so at least some are "
-            "demonstrably wrong."
+            "REJECTED by the expert on review — वन्हि stands as printed in "
+            "this edition and must not be touched. Worth recording why the "
+            "machine got this wrong: it was the highest-volume rule we "
+            "proposed (32 of 44 occurrences in the sample) and the argument "
+            "for it — that वह्नि is the standard form and the OCR emits both "
+            "spellings — was entirely reasoning about the language rather "
+            "than about the book. Editions have their own orthography, and "
+            "only someone reading this edition can settle that. Had this "
+            "been applied automatically it would have corrupted roughly 800 "
+            "correctly transcribed instances across the volume."
         ),
     ),
     Confusion(
         wrong="वाधित",
         right="बाधित",
+        confirmed=True,
         note=(
             "व for ब. बाधित / बाधितत्व ('contradicted') is standard Nyāya "
-            "vocabulary; बाध never appears correctly anywhere in the sample, "
-            "so the substitution looks total rather than occasional."
+            "vocabulary; बाध never appears correctly anywhere in the sample. "
+            "Confirmed by the expert."
         ),
     ),
     Confusion(
         wrong="वाघित",
         right="बाधित",
-        note="Same as वाधित, with घ additionally misread for ध.",
+        confirmed=True,
+        note="Same as वाधित, with घ additionally misread for ध. Confirmed by the expert.",
     ),
     Confusion(
         wrong="अवाधित",
         right="अबाधित",
-        note="Compound form of the बाध confusion.",
+        confirmed=True,
+        note="Compound form of the बाध confusion. Confirmed by the expert.",
     ),
     Confusion(
         wrong="व्यासि",
         right="व्याप्ति",
-        note="प्ति conjunct misread as सि. व्याप्ति ('pervasion') is the central term of the text.",
+        confirmed=True,
+        note=(
+            "प्ति conjunct misread as सि. व्याप्ति ('pervasion') is the central "
+            "term of the text. Confirmed by the expert."
+        ),
     ),
 )
 
@@ -83,7 +98,7 @@ def apply_confirmed(text: str) -> tuple[str, dict[str, int]]:
     per-rule count of what was changed, so every edit stays auditable."""
     applied: dict[str, int] = {}
     for c in CONFUSIONS:
-        if not c.confirmed:
+        if not c.confirmed or c.rejected:
             continue
         n = len(re.findall(re.escape(c.wrong), text))
         if n:
@@ -93,4 +108,10 @@ def apply_confirmed(text: str) -> tuple[str, dict[str, int]]:
 
 
 def unconfirmed_rules() -> tuple[Confusion, ...]:
-    return tuple(c for c in CONFUSIONS if not c.confirmed)
+    """Rules still awaiting a decision — excludes ones the expert rejected,
+    so a rejected rule is never re-proposed for review."""
+    return tuple(c for c in CONFUSIONS if not c.confirmed and not c.rejected)
+
+
+def rejected_rules() -> tuple[Confusion, ...]:
+    return tuple(c for c in CONFUSIONS if c.rejected)

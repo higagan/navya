@@ -39,9 +39,36 @@ def test_text_without_the_confusion_is_untouched(monkeypatch):
     assert applied == {}
 
 
-def test_every_shipped_rule_starts_unconfirmed():
-    # The expert has not signed off yet; nothing should be live by default.
-    assert len(unconfirmed_rules()) == len(normalize.CONFUSIONS)
+def test_rejected_rule_is_never_applied_even_if_marked_confirmed(monkeypatch):
+    # Guards the वन्हि case: the expert overruled it, and no later edit
+    # flipping `confirmed` should be able to resurrect it.
+    rule = Confusion(
+        wrong="वन्हि", right="वह्नि", note="expert rejected", confirmed=True, rejected=True
+    )
+    monkeypatch.setattr(normalize, "CONFUSIONS", (rule,))
+
+    out, applied = apply_confirmed("वन्हिमान् पर्वतः")
+
+    assert out == "वन्हिमान् पर्वतः"
+    assert applied == {}
+
+
+def test_rejected_rules_are_not_offered_for_review_again(monkeypatch):
+    rule = Confusion(wrong="वन्हि", right="वह्नि", note="rejected", rejected=True)
+    monkeypatch.setattr(normalize, "CONFUSIONS", (rule,))
+
+    assert unconfirmed_rules() == ()
+    assert normalize.rejected_rules() == (rule,)
+
+
+def test_shipped_rules_reflect_the_experts_decisions():
+    by_word = {c.wrong: c for c in normalize.CONFUSIONS}
+
+    assert by_word["वन्हि"].rejected, "expert said वन्हि stands as printed"
+    assert not by_word["वन्हि"].confirmed
+    for w in ("वाधित", "वाघित", "अवाधित", "व्यासि"):
+        assert by_word[w].confirmed, f"{w} was confirmed by the expert"
+        assert not by_word[w].rejected
 
 
 def test_shipped_rules_all_carry_justification():
@@ -51,7 +78,7 @@ def test_shipped_rules_all_carry_justification():
 
 
 def test_confirming_a_rule_is_all_that_enables_it(monkeypatch):
-    base = normalize.CONFUSIONS[0]
+    base = Confusion(wrong="व्यासि", right="व्याप्ति", note="test")
     monkeypatch.setattr(normalize, "CONFUSIONS", (replace(base, confirmed=True),))
 
     out, applied = apply_confirmed(base.wrong)
