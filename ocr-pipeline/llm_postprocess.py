@@ -54,7 +54,7 @@ def build_user_message(
     page_num: int,
     primary: PageOCRResult,
     cross_check: CrossCheckResult | None,
-    layers: list[str] | None = None,
+    book=None,
 ) -> str:
     parts = []
 
@@ -63,10 +63,8 @@ def build_user_message(
     # were the names from a *different* volume; the model duly applied them
     # here and produced a "bāladevī" section in a book that has none, while
     # never labelling the Dīdhiti that is actually present.
-    if layers:
-        parts.append("KNOWN LAYERS for this book (use only these):")
-        parts.extend(f"- {name}" for name in layers)
-        parts.append("")
+    if book is not None:
+        parts += [book.prompt_block(), ""]
 
     parts += [f"PAGE {page_num} START", primary.text.strip(), f"PAGE {page_num} END"]
 
@@ -109,6 +107,11 @@ def _call_llm(client: OpenAI, messages: list[dict]) -> str:
     completion = client.chat.completions.create(
         model=config.LLM_MODEL,
         max_tokens=8192,
+        # Splitting a page into its commentary layers has one right answer, so
+        # sampling only adds variance: at the default temperature the same page
+        # would come back with different block boundaries between runs, merging
+        # two commentaries one time and separating them the next.
+        temperature=0,
         # This is a mechanical extraction/structuring task, not a reasoning task —
         # extended thinking just burns the token budget without improving output,
         # and on some models leaves finish_reason="length" with empty content.
@@ -127,14 +130,14 @@ def _call_llm(client: OpenAI, messages: list[dict]) -> str:
 def structure_page(
     primary: PageOCRResult,
     cross_check: CrossCheckResult | None = None,
-    layers: list[str] | None = None,
+    book=None,
 ) -> StructuredPage:
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=config.OPENROUTER_API_KEY,
     )
 
-    user_message = build_user_message(primary.page_num, primary, cross_check, layers)
+    user_message = build_user_message(primary.page_num, primary, cross_check, book)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_message},

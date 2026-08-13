@@ -75,3 +75,23 @@ def test_structure_page_raises_structuring_error_on_empty_content():
 
         with pytest.raises(StructuringError):
             structure_page(primary)
+
+
+def test_structuring_uses_deterministic_decoding():
+    """Splitting a page into layers has one right answer.
+
+    At the default temperature the same page came back with different block
+    boundaries between runs — merging गादाधरी and विलासिनी on one run and
+    separating them on the next — which made layer accuracy unmeasurable.
+    """
+    primary = PageOCRResult(page_num=1, engine="google_vision", text="देवदत्तो गच्छति")
+    valid = (
+        '{"printed_page":null,"header":null,"sections":[],"needs_review":false,"review_notes":[]}'
+    )
+
+    with patch("llm_postprocess.OpenAI") as mock_openai:
+        mock_client = mock_openai.return_value
+        mock_client.chat.completions.create.return_value = _completion_with_content(valid)
+        structure_page(primary)
+
+    assert mock_client.chat.completions.create.call_args.kwargs["temperature"] == 0

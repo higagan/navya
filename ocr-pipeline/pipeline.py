@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
+import books
 import config
 from cross_check import cross_check as run_cross_check
 from llm_postprocess import StructuringError, structure_page
@@ -25,6 +26,13 @@ def run(pdf_path: Path, book_slug: str, first_page: int, last_page: int, dpi: in
     primary_engine = ParinamikaEngine()
     fallback_engine = GoogleVisionEngine()
 
+    book = books.get(book_slug)
+    if book is None:
+        print(
+            f"    no layer definition for '{book_slug}' — sections will be left\n"
+            f"    unidentified rather than guessed (add one in books.py)"
+        )
+
     pages_jsonl_path = jsonl_dir / "pages.jsonl"
     structured_jsonl_path = jsonl_dir / "structured_pages.jsonl"
 
@@ -43,6 +51,7 @@ def run(pdf_path: Path, book_slug: str, first_page: int, last_page: int, dpi: in
                     text_dir,
                     pages_f,
                     structured_f,
+                    book,
                 )
             except Exception as e:
                 # A single page failing (network blip, OCR engine outage, a
@@ -129,7 +138,14 @@ def _reconcile_page_numbers(structured_jsonl_path: Path):
 
 
 def _process_page(
-    page_num, image_path, primary_engine, fallback_engine, text_dir, pages_f, structured_f
+    page_num,
+    image_path,
+    primary_engine,
+    fallback_engine,
+    text_dir,
+    pages_f,
+    structured_f,
+    book=None,
 ):
     print(f"[2/4] OCR page {page_num}...")
     primary_result, used_engine = _recognize_with_fallback(
@@ -154,7 +170,7 @@ def _process_page(
 
     print(f"[3/4] Structuring page {page_num} with LLM...")
     try:
-        structured = structure_page(primary_result, xcheck)
+        structured = structure_page(primary_result, xcheck, book)
     except StructuringError as e:
         # Don't let one bad page kill the whole batch — the raw OCR text is
         # already saved above, so this page can be re-structured later.
