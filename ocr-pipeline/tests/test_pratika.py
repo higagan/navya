@@ -142,3 +142,37 @@ def test_page_furniture_is_never_a_link_source():
 
     # The stem is present in that footnote text, but footnotes aren't glossed.
     assert link_document(pages)[18][0][0].resolved is False
+
+
+def test_link_reports_which_passage_it_matched():
+    """The linker names the passage, so callers never re-derive it.
+
+    An earlier version returned only (layer, text); callers then searched for
+    that text again to identify the passage, and one link in twenty-two was
+    silently lost when the second search failed to reproduce the first.
+    """
+    sections = [
+        {"layer": "दीधिति", "text": DIDHITI},
+        {"layer": "गादाधरी", "text": GADADHARI},
+    ]
+
+    links = link_page(sections, pdf_page=17)
+
+    assert links[1][0].source_ref == (17, 0)
+
+
+def test_cross_page_link_names_the_earlier_page():
+    pages = [
+        {"pdf_page": 17, "sections": [{"layer": "दीधिति", "text": DIDHITI}]},
+        {"pdf_page": 18, "sections": [{"layer": "गादाधरी", "text": GADADHARI}]},
+    ]
+
+    link = link_document(pages)[18][0][0]
+
+    assert link.source_ref == (17, 0)
+
+
+def test_unresolved_link_carries_no_source_ref():
+    links = link_passage("अपूर्वपदेति ।", [("दीधिति", DIDHITI)])
+
+    assert links[0].source_ref is None

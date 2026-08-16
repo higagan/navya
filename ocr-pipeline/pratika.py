@@ -52,11 +52,27 @@ class Quotation:
 
 
 @dataclass(frozen=True)
+class Source:
+    """A passage a quotation might be pointing at.
+
+    Carries an opaque `ref` so callers can identify the exact passage matched.
+    An earlier version passed only (layer, text) and callers reconstructed the
+    passage afterwards by searching for that text again — which silently lost
+    a link whenever the reverse lookup failed to reproduce the match.
+    """
+
+    ref: object
+    layer: str
+    text: str
+
+
+@dataclass(frozen=True)
 class Link:
     quotation: Quotation
     source_layer: str | None  # layer the quoted words were found in
     source_offset: int | None  # where in that layer's text
     explicit_source: str | None = None  # layer named outright by the commentator
+    source_ref: object = None  # caller's identifier for the matched passage
 
     @property
     def resolved(self) -> bool:
@@ -95,28 +111,42 @@ def _locate(stem: str, haystack: str) -> int | None:
     return positions[k] if k != -1 else None
 
 
-def link_passage(text: str, sources: list[tuple[str, str]]) -> list[Link]:
+def _as_sources(items) -> list[Source]:
+    """Accept Source objects or bare (layer, text) pairs."""
+    out = []
+    for it in items or []:
+        if isinstance(it, Source):
+            out.append(it)
+        else:
+            layer, text = it
+            out.append(Source(ref=None, layer=layer, text=text))
+    return out
+
+
+def link_passage(text: str, sources) -> list[Link]:
     """Link one commentary's quotations into the layers it may be glossing.
 
-    `sources` is [(layer_name, layer_text)] in preference order — normally
-    the layer directly above, then the ones above that, since a commentary
-    glosses upward.
+    `sources` is a list of Source (or bare (layer, text) pairs) in preference
+    order — normally the layer directly above, then the ones above that, since
+    a commentary glosses upward.
     """
     explicit = named_source(text)
+    resolved_sources = _as_sources(sources)
     links = []
     for q in find_quotations(text):
-        found_layer = found_at = None
-        for layer_name, layer_text in sources:
-            at = _locate(q.stem, layer_text)
+        found = found_at = None
+        for src in resolved_sources:
+            at = _locate(q.stem, src.text)
             if at is not None:
-                found_layer, found_at = layer_name, at
+                found, found_at = src, at
                 break
         links.append(
             Link(
                 quotation=q,
-                source_layer=found_layer,
+                source_layer=found.layer if found else None,
                 source_offset=found_at,
                 explicit_source=explicit,
+                source_ref=found.ref if found else None,
             )
         )
     return links
@@ -135,26 +165,32 @@ def link_document(pages: list[dict], lookback: int = 2) -> dict[int, dict[int, l
     """
     out: dict[int, dict[int, list[Link]]] = {}
     for pos, page in enumerate(pages):
-        earlier: list[tuple[str, str]] = []
+        earlier: list[Source] = []
         for prev in reversed(pages[max(0, pos - lookback) : pos]):
             earlier += [
-                (s["layer"], s["text"])
-                for s in reversed(prev.get("sections", []))
+                Source(ref=(prev["pdf_page"], j), layer=s["layer"], text=s["text"])
+                for j, s in reversed(list(enumerate(prev.get("sections", []))))
                 if s.get("layer") not in _NOT_COMMENTARY
             ]
-        links = link_page(page.get("sections", []), extra_sources=earlier)
+        links = link_page(
+            page.get("sections", []), extra_sources=earlier, pdf_page=page["pdf_page"]
+        )
         if links:
             out[page["pdf_page"]] = links
     return out
 
 
 def link_page(
-    sections: list[dict], extra_sources: list[tuple[str, str]] | None = None
+    sections: list[dict],
+    extra_sources: list[Source] | None = None,
+    pdf_page: int | None = None,
 ) -> dict[int, list[Link]]:
     """Link every commentary section on a page to the sections above it.
 
     Returns {section_index: links}. Sections are assumed to be in reading
-    order, which is how the structuring step emits them.
+    order, which is how the structuring step emits them. When `pdf_page` is
+    given, each link carries a (pdf_page, section_index) ref identifying the
+    exact passage matched.
     """
     out: dict[int, list[Link]] = {}
     for i, sec in enumerate(sections):
@@ -163,8 +199,8 @@ def link_page(
         # Nearest preceding layers first — a commentary glosses upward, and
         # only once this page is exhausted does it reach back to earlier ones.
         sources = [
-            (s["layer"], s["text"])
-            for s in reversed(sections[:i])
+            Source(ref=(pdf_page, j), layer=s["layer"], text=s["text"])
+            for j, s in reversed(list(enumerate(sections[:i])))
             if s.get("layer") not in _NOT_COMMENTARY
         ]
         sources += extra_sources or []
