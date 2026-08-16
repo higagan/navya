@@ -234,9 +234,14 @@ html = """<!DOCTYPE html>
   var foot=document.getElementById('foot');
   foot.innerHTML='<b>'+s.pages+' pages, '+s.passages+' passages.</b> '+
     'Of '+s.quotations+' quotations the machine found, it could place <b>'+
-    s.resolved+'</b>; the rest are shown but marked unplaced. Links are '+
-    'automatic and not verified by a scholar — check any of them against '+
-    'the printed page before relying on it. Text is raw OCR, uncorrected.';
+    s.resolved+'</b>; the rest are shown but marked unplaced. An adversarial '+
+    'review of these links found long, distinctive quotations reliable, but '+
+    'short common words and the LAYER a passage is labelled with (which '+
+    'commentary it belongs to) much less so — the same page has come back '+
+    'labelled differently between runs. If your argument depends on who said '+
+    'something, verify the label against the printed page, not just the '+
+    'text. Nothing here has been checked by a scholar, and the text is raw '+
+    'OCR, uncorrected.';
 
   var current=pages[0], selected=null;
 

@@ -6,6 +6,7 @@ Avayavaprakaraṇam, in the layers the expert identified.
 
 from pratika import (
     MIN_STEM_CHARS,
+    _locate,
     find_quotations,
     link_document,
     link_page,
@@ -237,3 +238,55 @@ def test_explicitly_named_source_outranks_proximity():
     links = link_passage("मूले । समस्तरूपेति ।", [nearer, named])
 
     assert links[0].source_layer == "दीधिति"
+
+
+# --- fixes from the re-audit (surviving-link precision + over-pruning check) --
+
+
+def test_extended_stem_captures_a_two_word_pratika():
+    """'अनुमानं अनुमितिरिति' quotes two words, not one.
+
+    The no-spaces stem rule truncates it to just 'अनुमिति', which is short
+    enough to also match, wrongly, inside an unrelated compound elsewhere.
+    find_quotations should offer the fuller form as a first choice.
+    """
+    text = "अथवा अनुमानं अनुमितिः परार्थ ।"
+    quotes = find_quotations("अनुमानं अनुमितिरिति ।")
+
+    assert quotes[0].stem == "अनुमिति"
+    assert quotes[0].extended_stem == "अनुमानं अनुमिति"
+
+    links = link_passage("अनुमानं अनुमितिरिति ।", [("दीधिति", text)])
+    assert links[0].resolved
+    assert text[links[0].source_offset :].startswith("अनुमानं अनुमिति")
+
+
+def test_extended_stem_prevents_a_short_tail_from_matching_elsewhere():
+    # The short stem "अनुमिति" alone would match inside this unrelated
+    # compound; the two-word form should not, and should be preferred.
+    decoy = ("गादाधरी", "अनुमितिचरमकरणेत्यादिशब्दात्मक व्यापारः")
+    real = ("दीधिति", "अथवा अनुमानं अनुमितिः परार्थ ।")
+
+    links = link_passage("अनुमानं अनुमितिरिति ।", [decoy, real])
+
+    assert links[0].source_layer == "दीधिति"
+
+
+def test_hyphenated_linebreak_is_stitched_before_matching():
+    """Typesetting hyphens at a line break survive OCR as a literal '-\\n',
+    splitting one word into two: 'परिचा-\\nयकमात्रम्'."""
+    source = "उपलक्षणमेतत् । परिचा-\nयकमात्रं, वाच्यम् ।"
+
+    links = link_passage("परिचायकमात्रमिति ।", [("दीधिति", source)])
+
+    assert links[0].resolved
+    assert links[0].source_offset == source.index("परिचा")
+
+
+def test_hyphenated_linebreak_survives_inside_the_stem_itself():
+    stem_with_break = "पर्वतोवन्हिमानित्याकारक-\nबोधे"
+    source = "पर्वतोवन्हिमानित्याकारकबोधे पर्वतोवन्दिमान् ।"
+
+    at = _locate(stem_with_break, source)
+
+    assert at == 0

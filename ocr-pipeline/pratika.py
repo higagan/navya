@@ -58,6 +58,12 @@ class Quotation:
     stem: str  # the quoted words, before sandhi with इति
     marker: str  # how इति was joined on
     offset: int  # character offset within the commentary text
+    extended_stem: str | None = None  # stem plus up to one preceding word,
+    # for multi-word pratīkas like "अनुमानं अनुमितिः" — the no-spaces rule
+    # above only captures the last word, "अनुमिति", which is short enough
+    # to also match, wrongly, somewhere unrelated. Trying the extended form
+    # first resolves the audit's one confirmed wrong link.
+    extended_offset: int | None = None
 
 
 @dataclass(frozen=True)
@@ -88,14 +94,51 @@ class Link:
         return self.source_layer is not None
 
 
+_CLAUSE_BOUNDARY = frozenset("।॥\"'")
+
+
+def _preceding_word(text: str, start: int) -> int | None:
+    """Start offset of the Devanagari word immediately before `start`, or
+    None if `start` is already at a clause boundary."""
+    j = start - 1
+    while j >= 0 and text[j].isspace():
+        j -= 1
+    if j < 0 or text[j] in _CLAUSE_BOUNDARY:
+        return None
+    k = j
+    while k > 0 and not text[k - 1].isspace() and text[k - 1] not in _CLAUSE_BOUNDARY:
+        k -= 1
+    return k
+
+
 def find_quotations(text: str) -> list[Quotation]:
-    """Every pratīka-style quotation in a commentary passage."""
+    """Every pratīka-style quotation in a commentary passage.
+
+    Each also carries an `extended_stem` reaching one word further back,
+    for genuine multi-word pratīkas ("अनुमानं अनुमितिरिति" quotes two
+    words) that the single-word rule would otherwise truncate to just the
+    last one.
+    """
     out = []
     for m in _QUOTATION.finditer(text):
         stem = m.group(1).strip()
         if len(stem.replace(" ", "")) < MIN_STEM_CHARS:
             continue
-        out.append(Quotation(stem=stem, marker=m.group(2).strip(), offset=m.start(1)))
+        offset = m.start(1)
+        extended_stem = extended_offset = None
+        prev_start = _preceding_word(text, offset)
+        if prev_start is not None:
+            extended_offset = prev_start
+            extended_stem = text[prev_start : m.end(1)].strip()
+        out.append(
+            Quotation(
+                stem=stem,
+                marker=m.group(2).strip(),
+                offset=offset,
+                extended_stem=extended_stem,
+                extended_offset=extended_offset,
+            )
+        )
     return out
 
 
@@ -146,10 +189,12 @@ def _locate(stem: str, haystack: str, avoid: list[tuple[int, int]] | None = None
             return i
         start = i + 1
 
-    # OCR noise and line breaks put stray spaces inside compounds; compare
-    # without whitespace and map the hit back to an offset in the original.
-    flat_stem = stem.replace(" ", "")
-    positions = [j for j, ch in enumerate(haystack) if not ch.isspace()]
+    # OCR noise and line breaks put stray spaces inside compounds, and the
+    # original typesetting's end-of-line hyphens survive as a literal '-'
+    # right before a newline ("परिचा-\nयकमात्रम्"), splitting one word into
+    # two. Compare with both removed and map hits back to the original.
+    flat_stem = _dehyphenate(stem)
+    positions = _kept_positions(haystack)
     flat_hay = "".join(haystack[j] for j in positions)
     k = 0
     while (m := flat_hay.find(flat_stem, k)) != -1:
@@ -158,6 +203,26 @@ def _locate(stem: str, haystack: str, avoid: list[tuple[int, int]] | None = None
             return at
         k = m + 1
     return None
+
+
+def _dehyphenate(s: str) -> str:
+    return re.sub(r"-\s*\n\s*", "", s).replace(" ", "")
+
+
+def _kept_positions(haystack: str) -> list[int]:
+    positions = []
+    i, n = 0, len(haystack)
+    while i < n:
+        ch = haystack[i]
+        if ch.isspace():
+            i += 1
+            continue
+        if ch == "-" and i + 1 < n and haystack[i + 1] == "\n":
+            i += 1  # drop the hyphen; the newline is whitespace, skipped next
+            continue
+        positions.append(i)
+        i += 1
+    return positions
 
 
 def _as_sources(items) -> list[Source]:
@@ -194,10 +259,20 @@ def link_passage(text: str, sources) -> list[Link]:
     links = []
     for q in find_quotations(text):
         found = found_at = None
-        for src in resolved_sources:
-            at = _locate(q.stem, src.text, avoid=_quotation_spans(src.text))
-            if at is not None:
-                found, found_at = src, at
+        # Try the multi-word form first: a two-word pratīka's LAST word
+        # alone is often short enough to also match somewhere unrelated
+        # ("अनुमिति" landing inside "अनुमितिचरमकरणेत्यादि"), so prefer the
+        # fuller quotation when the text actually supports it and only
+        # fall back to the single word if it doesn't.
+        for candidate in (q.extended_stem, q.stem):
+            if not candidate:
+                continue
+            for src in resolved_sources:
+                at = _locate(candidate, src.text, avoid=_quotation_spans(src.text))
+                if at is not None:
+                    found, found_at = src, at
+                    break
+            if found:
                 break
         links.append(
             Link(
