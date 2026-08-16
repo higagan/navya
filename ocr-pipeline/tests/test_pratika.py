@@ -176,3 +176,64 @@ def test_unresolved_link_carries_no_source_ref():
     links = link_passage("अपूर्वपदेति ।", [("दीधिति", DIDHITI)])
 
     assert links[0].source_ref is None
+
+
+# --- fixes from the adversarial link audit -------------------------------
+# Three independent skeptics judged 22 machine-made links: 14 correct,
+# 8 wrong, 2 uncertain. The wrong ones fell into distinct classes, each
+# pinned below.
+
+DEPTHS = {"दीधिति": 0, "गादाधरी": 1, "विलासिनी": 2, "शीर्षक": None, "टिप्पणी": None}
+
+
+def test_commentary_never_glosses_its_own_subcommentary():
+    """गादाधरी explains the दीधिति; विलासिनी explains the गादाधरी.
+
+    Cross-page lookback let a गादाधरी match into a विलासिनी printed
+    earlier — inverted, and unfixable by any amount of string matching.
+    """
+    pages = [
+        {"pdf_page": 17, "sections": [{"layer": "विलासिनी", "text": "समस्तरूप इति विवरणम्"}]},
+        {"pdf_page": 18, "sections": [{"layer": "गादाधरी", "text": GADADHARI}]},
+    ]
+
+    assert link_document(pages, depths=DEPTHS)[18][0][0].resolved is False
+    # Without the hierarchy it would happily match backwards:
+    assert link_document(pages)[18][0][0].resolved is True
+
+
+def test_quotation_may_not_start_mid_word():
+    """A pratīka abbreviates from the start of a phrase, never the middle.
+
+    तादृश was matching inside एतादृश, and शाब्द inside प्रयोजकशाब्दज्ञान.
+    """
+    links = link_passage("तादृशेति ।", [("दीधिति", "इति । एतादृश महावाक्यार्थबोधे")])
+    assert links[0].resolved is False
+
+    # but abbreviating a compound from its start is legitimate
+    ok = link_passage("समस्तरूपेति ।", [("दीधिति", "तत्र समस्तरूपोपपन्नलिङ्गम्")])
+    assert ok[0].resolved is True
+
+
+def test_quotation_does_not_match_another_passages_quotation():
+    """Matching into a pratīka links a pointer to a pointer.
+
+    समस्त resolved into गादाधरी's own opening 'समस्तरूपेति' — a quotation
+    marker, not anything being glossed.
+    """
+    links = link_passage("समस्तेति ।", [("गादाधरी", GADADHARI)])
+
+    assert links[0].resolved is False
+
+
+def test_explicitly_named_source_outranks_proximity():
+    """'मूले ।' means the root text, whatever happens to sit nearest.
+
+    The signal was detected and then ignored when choosing a layer.
+    """
+    nearer = ("गादाधरी", "समस्तरूप इति गादाधर्यां")
+    named = ("दीधिति", "तत्र समस्तरूपोपपन्नलिङ्गम्")
+
+    links = link_passage("मूले । समस्तरूपेति ।", [nearer, named])
+
+    assert links[0].source_layer == "दीधिति"

@@ -16,6 +16,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+import books
 from pratika import link_document
 
 
@@ -50,7 +51,7 @@ def _passage_id(pdf_page: int, section_index: int) -> str:
     return f"p{pdf_page}.s{section_index}"
 
 
-def build(structured_jsonl: Path) -> dict:
+def build(structured_jsonl: Path, book_slug: str = "avayavaprakaranam") -> dict:
     pages = [
         json.loads(line)
         for line in structured_jsonl.read_text(encoding="utf-8").splitlines()
@@ -77,7 +78,9 @@ def build(structured_jsonl: Path) -> dict:
             index[(page["pdf_page"], sec["layer"], i)] = pid
 
     glosses: list[Gloss] = []
-    for pdf_page, sections in link_document(pages).items():
+    book = books.get(book_slug)
+    depths = book.depths if book else None
+    for pdf_page, sections in link_document(pages, depths=depths).items():
         for sec_i, links in sections.items():
             from_id = _passage_id(pdf_page, sec_i)
             for link in links:

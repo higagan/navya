@@ -19,6 +19,11 @@ class Layer:
     name: str  # Devanagari, as the expert named it
     roman: str
     hint: str = ""
+    # Commentary depth: 0 is the text being glossed, 1 comments on 0, 2 on 1.
+    # A passage may only gloss a strictly shallower layer — गादाधरी explains
+    # the दीधिति, never its own sub-commentary. None means "page furniture",
+    # which neither glosses nor is glossed.
+    depth: int | None = None
 
 
 @dataclass(frozen=True)
@@ -33,6 +38,10 @@ class Book:
     @property
     def layer_names(self) -> list[str]:
         return [layer.name for layer in self.layers]
+
+    @property
+    def depths(self) -> dict[str, int | None]:
+        return {layer.name: layer.depth for layer in self.layers}
 
     def prompt_block(self) -> str:
         """The layer vocabulary and layout evidence, as given to the model."""
@@ -52,28 +61,33 @@ AVAYAVAPRAKARANAM = Book(
     title="Avayavaprakaraṇam (Anumāna Gādādharī)",
     edition="ed. Jvālāprasād Gauḍ with the Vilāsinī commentary, Varanasi, 1964",
     layers=(
-        Layer("शीर्षक", "header", "running head and page number, one short line at the very top"),
+        Layer(
+            "शीर्षक", "header", "running head and page number, one short line at the very top"
+        ),  # depth None
         Layer(
             "दीधिति",
             "dīdhiti",
             "the text being glossed. Short — often only a few lines — and sometimes "
             "set in smaller type. Reads as continuous prose rather than opening by "
             "quoting a word",
+            depth=0,
         ),
         Layer(
             "गादाधरी",
             "gādādharī",
             "the main commentary and the bulk of the volume. Typically opens by "
             "quoting a word from the दीधिति followed by इति, then glossing it",
+            depth=1,
         ),
         Layer(
             "विलासिनी",
             "vilāsinī",
             "the editor's sub-commentary, below the गादाधरी. Also glosses word by "
             "word, and may refer back to the root explicitly (e.g. opening मूले)",
+            depth=2,
         ),
         Layer("टिप्पणी", "footnote", "foot of the page, opening with a Devanagari numeral"),
-        Layer("मूल", "mūla", "the root text itself. Rare — only a few lines, often absent"),
+        Layer("मूल", "mūla", "the root text itself. Rare — only a few lines, often absent", depth=0),
     ),
     layout_note=(
         "Blocks run top to bottom in that order, though a page may omit any of "

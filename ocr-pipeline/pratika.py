@@ -43,6 +43,15 @@ _EXPLICIT_SOURCE = re.compile(r"(मूले|दीधितौ|गादाध
 # Page furniture: neither glosses anything nor gets glossed.
 _NOT_COMMENTARY = frozenset({"शीर्षक", "टिप्पणी", "unidentified"})
 
+# What a commentator means when he names his source.
+_NAMED_TO_LAYERS = {
+    "मूले": frozenset({"मूल", "दीधिति"}),
+    "दीधितौ": frozenset({"दीधिति"}),
+    "गादाधर्याम्": frozenset({"गादाधरी"}),
+    "गादाधर्यां": frozenset({"गादाधरी"}),
+    "गादाधर्या": frozenset({"गादाधरी"}),
+}
+
 
 @dataclass(frozen=True)
 class Quotation:
@@ -96,19 +105,59 @@ def named_source(text: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _locate(stem: str, haystack: str) -> int | None:
+_WORD_START_OK = frozenset(" \t\n।॥,;()'\"")
+
+
+def _starts_a_word(haystack: str, at: int) -> bool:
+    """A pratīka quotes the BEGINNING of a phrase.
+
+    It may stop mid-compound — समस्तरूप legitimately abbreviates
+    समस्तरूपोपपन्न — but it never *starts* mid-word. Without this check
+    तादृश matched inside एतादृश and शाब्द inside प्रयोजकशाब्दज्ञान.
+    """
+    if at == 0:
+        return True
+    return haystack[at - 1] in _WORD_START_OK
+
+
+def _quotation_spans(text: str) -> list[tuple[int, int]]:
+    """Character ranges occupied by this passage's own quotations.
+
+    A commentary's pratīka is a pointer to somewhere else, not glossable
+    content, so matching into one links a quotation to another quotation.
+    That produced two of the audit's wrong links (समस्त, किन्त्व).
+    """
+    return [(q.offset, q.offset + len(q.stem)) for q in find_quotations(text)]
+
+
+def _locate(stem: str, haystack: str, avoid: list[tuple[int, int]] | None = None) -> int | None:
     if not stem:
         return None
-    i = haystack.find(stem)
-    if i != -1:
-        return i
+    avoid = avoid or []
+
+    def acceptable(at: int) -> bool:
+        if not _starts_a_word(haystack, at):
+            return False
+        return not any(lo <= at < hi for lo, hi in avoid)
+
+    start = 0
+    while (i := haystack.find(stem, start)) != -1:
+        if acceptable(i):
+            return i
+        start = i + 1
+
     # OCR noise and line breaks put stray spaces inside compounds; compare
     # without whitespace and map the hit back to an offset in the original.
     flat_stem = stem.replace(" ", "")
     positions = [j for j, ch in enumerate(haystack) if not ch.isspace()]
     flat_hay = "".join(haystack[j] for j in positions)
-    k = flat_hay.find(flat_stem)
-    return positions[k] if k != -1 else None
+    k = 0
+    while (m := flat_hay.find(flat_stem, k)) != -1:
+        at = positions[m]
+        if acceptable(at):
+            return at
+        k = m + 1
+    return None
 
 
 def _as_sources(items) -> list[Source]:
@@ -132,11 +181,21 @@ def link_passage(text: str, sources) -> list[Link]:
     """
     explicit = named_source(text)
     resolved_sources = _as_sources(sources)
+
+    # When the commentator names his source outright ("मूले ।" — in the root
+    # text), that beats proximity. Previously this was detected and then
+    # ignored, so a विलासिनी explicitly quoting the root was matched into the
+    # गादाधरी simply because the गादाधरी sat nearer on the page.
+    if explicit:
+        wanted = _NAMED_TO_LAYERS.get(explicit, frozenset())
+        preferred = [s for s in resolved_sources if s.layer in wanted]
+        resolved_sources = preferred + [s for s in resolved_sources if s not in preferred]
+
     links = []
     for q in find_quotations(text):
         found = found_at = None
         for src in resolved_sources:
-            at = _locate(q.stem, src.text)
+            at = _locate(q.stem, src.text, avoid=_quotation_spans(src.text))
             if at is not None:
                 found, found_at = src, at
                 break
@@ -152,7 +211,9 @@ def link_passage(text: str, sources) -> list[Link]:
     return links
 
 
-def link_document(pages: list[dict], lookback: int = 2) -> dict[int, dict[int, list[Link]]]:
+def link_document(
+    pages: list[dict], lookback: int = 2, depths: dict[str, int | None] | None = None
+) -> dict[int, dict[int, list[Link]]]:
     """Link every page, allowing quotations to reach back to earlier pages.
 
     Commentary doesn't stop at a page break — a passage at the top of one
@@ -173,7 +234,10 @@ def link_document(pages: list[dict], lookback: int = 2) -> dict[int, dict[int, l
                 if s.get("layer") not in _NOT_COMMENTARY
             ]
         links = link_page(
-            page.get("sections", []), extra_sources=earlier, pdf_page=page["pdf_page"]
+            page.get("sections", []),
+            extra_sources=earlier,
+            pdf_page=page["pdf_page"],
+            depths=depths,
         )
         if links:
             out[page["pdf_page"]] = links
@@ -184,6 +248,7 @@ def link_page(
     sections: list[dict],
     extra_sources: list[Source] | None = None,
     pdf_page: int | None = None,
+    depths: dict[str, int | None] | None = None,
 ) -> dict[int, list[Link]]:
     """Link every commentary section on a page to the sections above it.
 
@@ -204,6 +269,17 @@ def link_page(
             if s.get("layer") not in _NOT_COMMENTARY
         ]
         sources += extra_sources or []
+
+        # A passage may only gloss a strictly shallower layer. गादाधरी
+        # explains the दीधिति; it never explains विलासिनी, which is its own
+        # sub-commentary. Without this the cross-page lookback let a गादाधरी
+        # match into a विलासिनी printed earlier — the audit's most serious
+        # failure class, and one no amount of string matching can catch.
+        if depths:
+            own = depths.get(sec.get("layer"))
+            if own is not None:
+                sources = [s for s in sources if (d := depths.get(s.layer)) is not None and d < own]
+
         # Deliberately still link when there is no source available: the
         # quotations are real and simply unresolved. Skipping them here would
         # drop the hardest cases out of the denominator and flatter the
