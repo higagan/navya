@@ -22,7 +22,7 @@ fi
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 cp "$HERE/dist/index.html" "$HERE/dist/vercel.json" "$STAGE/"
-for extra in round2.html round3.html; do
+for extra in round2.html round3.html reader.html; do
   [ -f "$HERE/dist/$extra" ] && cp "$HERE/dist/$extra" "$STAGE/"
 done
 
