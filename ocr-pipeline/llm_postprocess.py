@@ -181,3 +181,74 @@ def structure_page(
         review_notes=payload.get("review_notes", []),
         source_engine=primary.engine,
     )
+
+
+def structure_page_consensus(
+    primary: PageOCRResult,
+    cross_check: CrossCheckResult | None = None,
+    book=None,
+    samples: int = 3,
+) -> StructuredPage:
+    """Structure a page several times and vote on the layer labels.
+
+    Found by testing: with an identical prompt and temperature=0, the same
+    ambiguous block came back labelled दीधिति on one call and गादाधरी on
+    the next — output isn't perfectly reproducible across separate calls.
+    A single strengthened-prompt attempt to fix segmentation caused a
+    7/7 -> 1/7 regression on the expert-labelled pages, so this takes a
+    steadier route: run structuring several times and keep whichever label
+    a majority of runs agree on, rather than trusting any single call.
+
+    Block BOUNDARIES were stable across the runs actually observed — the
+    same page came back split into the same number of blocks every time,
+    only the label attached to one of them changed. So this votes on
+    labels only when every sample agrees on the section count; when they
+    don't, that disagreement is a real finding and gets surfaced rather
+    than silently resolved by picking one run.
+    """
+    results = [structure_page(primary, cross_check, book) for _ in range(samples)]
+    return _reconcile_samples(results)
+
+
+def _reconcile_samples(results: list[StructuredPage]) -> StructuredPage:
+    from collections import Counter
+
+    counts = Counter(len(r.sections) for r in results)
+    majority_count, agree_n = counts.most_common(1)[0]
+    agreeing = [r for r in results if len(r.sections) == majority_count]
+    base = agreeing[0]
+
+    sections = []
+    notes = []
+    for i in range(majority_count):
+        layers = [r.sections[i].layer for r in agreeing]
+        layer_counts = Counter(layers)
+        winning_layer, winning_n = layer_counts.most_common(1)[0]
+        text = next(
+            (r.sections[i].text for r in agreeing if r.sections[i].layer == winning_layer),
+            base.sections[i].text,
+        )
+        sections.append(StructuredSection(layer=winning_layer, text=text))
+        if winning_n < len(agreeing):
+            notes.append(
+                f"section {i}: samples disagreed on layer — {dict(layer_counts)}; "
+                f"used {winning_layer!r} ({winning_n}/{len(agreeing)})"
+            )
+
+    review_notes = list(base.review_notes) + notes
+    if agree_n < len(results):
+        review_notes.append(
+            f"samples disagreed on how many sections this page has — "
+            f"{dict(counts)}; used the majority ({majority_count} sections, "
+            f"{agree_n}/{len(results)} samples)"
+        )
+
+    return StructuredPage(
+        pdf_page=base.pdf_page,
+        printed_page=base.printed_page,
+        header=base.header,
+        sections=sections,
+        needs_review=base.needs_review or bool(notes) or agree_n < len(results),
+        review_notes=review_notes,
+        source_engine=base.source_engine,
+    )

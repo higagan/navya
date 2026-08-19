@@ -234,14 +234,15 @@ html = """<!DOCTYPE html>
   var foot=document.getElementById('foot');
   foot.innerHTML='<b>'+s.pages+' pages, '+s.passages+' passages.</b> '+
     'Of '+s.quotations+' quotations the machine found, it could place <b>'+
-    s.resolved+'</b>; the rest are shown but marked unplaced. An adversarial '+
-    'review of these links found long, distinctive quotations reliable, but '+
-    'short common words and the LAYER a passage is labelled with (which '+
-    'commentary it belongs to) much less so — the same page has come back '+
-    'labelled differently between runs. If your argument depends on who said '+
-    'something, verify the label against the printed page, not just the '+
-    'text. Nothing here has been checked by a scholar, and the text is raw '+
-    'OCR, uncorrected.';
+    s.resolved+'</b>; the rest are shown but marked unplaced. Layer labels '+
+    '(which commentary a passage belongs to) are now voted from five '+
+    'independent readings of each page rather than one, which fixed pages '+
+    'coming back labelled differently between runs — but on the handful of '+
+    'genuinely ambiguous passages the vote can still settle on the wrong '+
+    'side, just consistently instead of randomly. If your argument depends '+
+    'on who said something, verify the label against the printed page, not '+
+    'just the text. Nothing here has been checked by a scholar, and the '+
+    'text is raw OCR, uncorrected.';
 
   var current=pages[0], selected=null;
 

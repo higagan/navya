@@ -5,7 +5,7 @@ from pathlib import Path
 import books
 import config
 from cross_check import cross_check as run_cross_check
-from llm_postprocess import StructuringError, structure_page
+from llm_postprocess import StructuringError, structure_page, structure_page_consensus
 from ocr_engines import EngineUnavailableError, GoogleVisionEngine, ParinamikaEngine
 from page_numbering import infer_offset, printed_page_for
 from pdf_to_images import page_num_from_filename, pdf_to_page_images
@@ -168,9 +168,19 @@ def _process_page(
     (text_dir / f"page_{page_num:03d}.txt").write_text(primary_result.text, encoding="utf-8")
     pages_f.write(json.dumps(primary_result.to_dict(), ensure_ascii=False) + "\n")
 
-    print(f"[3/4] Structuring page {page_num} with LLM...")
+    if config.STRUCTURE_SAMPLES > 1:
+        print(
+            f"[3/4] Structuring page {page_num} with LLM ({config.STRUCTURE_SAMPLES}x consensus)..."
+        )
+    else:
+        print(f"[3/4] Structuring page {page_num} with LLM...")
     try:
-        structured = structure_page(primary_result, xcheck, book)
+        if config.STRUCTURE_SAMPLES > 1:
+            structured = structure_page_consensus(
+                primary_result, xcheck, book, samples=config.STRUCTURE_SAMPLES
+            )
+        else:
+            structured = structure_page(primary_result, xcheck, book)
     except StructuringError as e:
         # Don't let one bad page kill the whole batch — the raw OCR text is
         # already saved above, so this page can be re-structured later.

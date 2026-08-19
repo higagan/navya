@@ -35,5 +35,13 @@ LLM_MODEL = os.environ.get("NAVYA_LLM_MODEL", "anthropic/claude-sonnet-5")
 RUN_CROSS_CHECK = os.environ.get("NAVYA_RUN_CROSS_CHECK", "1") == "1"
 CROSS_CHECK_SIMILARITY_THRESHOLD = float(os.environ.get("NAVYA_XCHECK_THRESHOLD", "0.75"))
 
+# Structuring isn't perfectly reproducible run to run even at temperature=0
+# (observed directly: the same block came back labelled differently between
+# two otherwise-identical pipeline runs). >1 structures each page that many
+# times and votes on the layer labels instead of trusting one call — see
+# llm_postprocess.structure_page_consensus. Off by default since it multiplies
+# LLM cost by this factor.
+STRUCTURE_SAMPLES = int(os.environ.get("NAVYA_STRUCTURE_SAMPLES", "1"))
+
 for d in (PAGES_DIR, TEXT_DIR, JSONL_DIR):
     d.mkdir(parents=True, exist_ok=True)
